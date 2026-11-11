@@ -1,0 +1,20 @@
+import {describe,it,expect} from 'vitest';
+import {GIFT_OPTION_IDS,normalizeGiftSelections,addGift,removeGift,giftCounts,canConfirmGifts} from './gifts';
+import {giftOptions} from './data';
+import type {GiftOptionId} from './gifts';
+describe('Type 3 — quota-bound gift choices',()=>{
+ it('offers exactly three distinct options',()=>{expect(giftOptions.map(g=>g.id)).toEqual([...GIFT_OPTION_IDS]);expect(giftOptions.map(g=>g.pack)).toEqual(['4 рул.','2 рул.','1 шт.']);});
+ it('no gift can be chosen before the first threshold',()=>{expect(addGift([],'gift-tape',0)).toEqual([]);expect(canConfirmGifts([],[],0)).toBe(false);});
+ it('one earned slot allows exactly one selected option',()=>{const first=addGift([],'gift-tape',1);expect(first).toEqual(['gift-tape']);expect(addGift(first,'gift-seal',1)).toEqual(first);expect(addGift(first,'gift-tape',1)).toEqual(first);});
+ it('rejects unknown gift IDs',()=>{expect(addGift([],'not-a-gift',1)).toEqual([]);expect(normalizeGiftSelections(['invalid','gift-tape'],1)).toEqual(['gift-tape']);});
+ it('first complete choice can be confirmed, empty or unchanged choice cannot',()=>{expect(canConfirmGifts(['gift-tape'],[],1)).toBe(true);expect(canConfirmGifts([],[],1)).toBe(false);expect(canConfirmGifts(['gift-tape'],['gift-tape'],1)).toBe(false);});
+ it('existing first gift persists while earning a second slot',()=>{const first:GiftOptionId[]=['gift-tape'];const draft=normalizeGiftSelections(first,2);expect(draft).toEqual(first);expect(canConfirmGifts(draft,first,2)).toBe(false);const full=addGift(draft,'gift-seal',2);expect(full).toEqual(['gift-tape','gift-seal']);expect(first).toEqual(['gift-tape']);expect(canConfirmGifts(full,first,2)).toBe(true);});
+ it('cannot confirm over quota or with invalid items',()=>{expect(canConfirmGifts(['gift-tape','gift-seal'],[],1)).toBe(false);expect(canConfirmGifts(['invalid' as GiftOptionId,'gift-tape'],[],2)).toBe(false);});
+ it('can change a gift by removing a draft option then choosing another',()=>{const applied:GiftOptionId[]=['gift-tape'];const changed=addGift(removeGift(applied,'gift-tape'),'gift-seal',1);expect(changed).toEqual(['gift-seal']);expect(applied).toEqual(['gift-tape']);expect(canConfirmGifts(changed,applied,1)).toBe(true);});
+ it('multiple thresholds permit repeated gifts without a limit of three variants',()=>{let draft:GiftOptionId[]=[];for(let n=0;n<10;n++)draft=addGift(draft,'gift-tape',10);expect(draft).toHaveLength(10);expect(giftCounts(draft)).toEqual({'gift-tape':10});expect(canConfirmGifts(draft,[],10)).toBe(true);expect(addGift(draft,'gift-seal',10)).toEqual(draft);});
+ it('groups repeated choices into one free gift row with a count',()=>{expect(giftCounts(['gift-tape','gift-tape','gift-seal'])).toEqual({'gift-tape':2,'gift-seal':1});});
+ it('declining quota preserves earliest choices and removes only excess choices',()=>{const chosen:GiftOptionId[]=['gift-tape','gift-seal','gift-plaster'];expect(normalizeGiftSelections(chosen,2)).toEqual(['gift-tape','gift-seal']);expect(normalizeGiftSelections(chosen,1)).toEqual(['gift-tape']);expect(normalizeGiftSelections(chosen,0)).toEqual([]);expect(chosen).toHaveLength(3);});
+ it('deletion removes selected gift row while retaining other chosen types',()=>{expect(removeGift(['gift-tape','gift-tape','gift-seal'],'gift-tape')).toEqual(['gift-seal']);});
+ it('changing only the order is not a different gift selection',()=>{expect(canConfirmGifts(['gift-seal','gift-tape'],['gift-tape','gift-seal'],2)).toBe(false);});
+ it('cancelled drafts do not mutate committed choices',()=>{const selected:GiftOptionId[]=['gift-tape'];const draft=addGift([...selected],'gift-seal',2);expect(draft).toHaveLength(2);expect(selected).toEqual(['gift-tape']);});
+});
